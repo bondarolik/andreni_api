@@ -1,27 +1,39 @@
 module AndreaniApi
   class Auth
-    def initialize(api_key = nil, api_secret = nil, sandbox = false)
-      @api_key = api_key || ENV["ANDREANI_API_USER"]
-      @api_secret = api_secret || ENV["ANDREANI_API_KEY"]
+    def initialize(user = nil, pass = nil, sandbox = false)
+      @user = user || ENV["ANDREANI_API_USER"]
+      @pass = pass || ENV["ANDREANI_API_KEY"]
 
       # No trailing slash / at the end
       case sandbox
-      when true  then @base_uri = "https://api.andreani.com"
-      when false then @base_uri = "https://api.qa.andreani.com"
+      when false then @base_uri = "https://api.andreani.com"
+      when true  then @base_uri = "https://api.qa.andreani.com"
       end
     end
 
-    def login
+    def get_token
       endpoint = "#{@base_uri}/login"
-
       begin
-        response = RestClient.post endpoint, { "api-key" => @api_key, "secret-key" => @api_secret }
-        result   = JSON.parse(response, object_class: OpenStruct)
+        uri = URI.parse("#{endpoint}")
+        request = Net::HTTP::Get.new(uri)
+        auth = "Basic " + Base64.encode64("#{@user}:#{@pass}").chomp
+        request["Authorization"] = auth
+        request.content_type = "application/json"
+        req_options = {
+          use_ssl: uri.scheme == "https",
+          read_timeout: 2,
+        }
+        response = Net::HTTP.start(uri.hostname, uri.port, req_options) do |http|
+          http.read_timeout = 2
+          http.request(request)
+        end
+
+        # Return token
+        result = response['x-authorization-token']
         return result
       rescue => e
-        return JSON.parse(e.response, object_class: OpenStruct)
+        return JSON.parse(e, object_class: OpenStruct)
       end
     end
-
   end # AndreaniApi::Auth
 end
